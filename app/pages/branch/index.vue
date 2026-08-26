@@ -42,6 +42,11 @@ interface BranchApiResponse {
   data: BranchApiItem[]
 }
 
+interface DeleteResponse {
+  success: boolean
+  message: string
+}
+
 interface BranchTableRow extends DataTableRow {
   id: string
   company_id: string
@@ -86,7 +91,12 @@ const columns: DataTableColumn[] = [
   { key: "actions", label: "Actions", align: "right" },
 ]
 
-const { data: branchResponse, error, pending } = await useApiFetch<BranchApiResponse>("/branch/get")
+const { data: branchResponse, error, pending, refresh } = await useApiFetch<BranchApiResponse>("/branch/get")
+
+const toast = useToast()
+const isDeleting = ref(false)
+const showDeleteDialog = ref(false)
+const rowPendingDelete = ref<DataTableRow | null>(null)
 
 function displayValue(value: string | null) {
   return value || "-"
@@ -94,6 +104,19 @@ function displayValue(value: string | null) {
 
 function displayDate(value: string | null) {
   return value ? value.slice(0, 10) : "-"
+}
+
+function getErrorMessage(error: any): string {
+  if (error?.data?.message) {
+    return error.data.message
+  }
+  if (error?.message) {
+    return error.message
+  }
+  if (error?.statusMessage) {
+    return error.statusMessage
+  }
+  return "An unexpected error occurred. Please try again."
 }
 
 const branches = computed<BranchTableRow[]>(() =>
@@ -130,6 +153,62 @@ function duplicateBranch(row: DataTableRow) {
       duplicateFrom: String(row.id),
     },
   })
+}
+
+// Step 1: clicking the delete icon ONLY opens the confirm dialog.
+// No API call, no toast, no mutation happens here.
+function deleteBranch(row: DataTableRow) {
+  rowPendingDelete.value = row
+  showDeleteDialog.value = true
+}
+
+// Step 2: clicking "Delete Branch" inside the dialog is the ONLY place
+// that actually calls the API, shows a toast, and refreshes the table.
+async function confirmDeleteBranch() {
+  if (isDeleting.value || !rowPendingDelete.value) {
+    return
+  }
+
+  const branchId = String(rowPendingDelete.value.id)
+  const branchName = String(rowPendingDelete.value.name)
+
+  isDeleting.value = true
+
+  try {
+    await useApiRequest<DeleteResponse>(`/branch/delete/${branchId}`, {
+      method: "DELETE",
+    })
+
+    toast.add({
+      title: "Branch deleted",
+      description: `${branchName} was deleted successfully.`,
+      color: "error",
+      icon: "i-lucide-trash-2",
+    })
+
+    showDeleteDialog.value = false
+    await refresh()
+  }
+  catch (error) {
+    toast.add({
+      title: "Failed to delete branch",
+      description: getErrorMessage(error),
+      color: "error",
+      icon: "i-lucide-circle-alert",
+    })
+
+    console.error("Delete error:", error)
+  }
+  finally {
+    isDeleting.value = false
+    rowPendingDelete.value = null
+  }
+}
+
+// Clicking "Keep Branch" or the backdrop — just closes the dialog, no toast.
+function cancelDeleteBranch() {
+  showDeleteDialog.value = false
+  rowPendingDelete.value = null
 }
 </script>
 
@@ -169,7 +248,20 @@ function duplicateBranch(row: DataTableRow) {
       search-placeholder="Search branches by name, phone, or address..."
       title="Branches"
       view-path-prefix="/branch"
+      :is-loading="isDeleting"
+      @delete="deleteBranch"
       @duplicate="duplicateBranch"
+    />
+
+    <AppConfirmDialog
+      v-model="showDeleteDialog"
+      title="Delete this branch permanently?"
+      :description="`This action will delete '${rowPendingDelete?.name}' and all associated data. This cannot be undone.`"
+      cancel-label="Keep Branch"
+      confirm-label="Delete Branch"
+      :loading="isDeleting"
+      @confirm="confirmDeleteBranch"
+      @cancel="cancelDeleteBranch"
     />
   </div>
 </template>

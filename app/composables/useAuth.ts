@@ -1,15 +1,23 @@
 export interface UserProfile {
   id: string
   username: string
-  email: string
-  first_name: string
-  last_name: string
-  phone: string
+  email: string | null
+  first_name: string | null
+  last_name: string | null
+  phone: string | null
   user_role: string
   working_company_id: string
   working_branch_id: string
+  access_company_id: string[]
+  access_branch_id: string[]
   created_at: string
   updated_at: string
+}
+
+interface CurrentUserResponse {
+  success: boolean
+  message: string
+  data: UserProfile
 }
 
 export function useAuth() {
@@ -18,9 +26,9 @@ export function useAuth() {
   async function fetchUser(token?: string) {
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      const res = await useApiRequest<{ success: boolean; data: UserProfile; message: string }>("/me", { 
+      const res = await useApiRequest<CurrentUserResponse>("/me", {
         method: "GET",
-        headers 
+        headers,
       })
       if (res && res.data) {
         user.value = res.data

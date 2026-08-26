@@ -145,12 +145,12 @@ function duplicateRow(row: DataTableRow) {
 
 function deleteRow(row: DataTableRow) {
   emit("delete", row)
-  toast.add({
-    title: "Record deleted",
-    description: `${getRowLabel(row)} was selected for deletion.`,
-    color: "error",
-    icon: "i-lucide-trash-2",
-  })
+  // toast.add({
+  //   title: "Record deleted",
+  //   description: `${getRowLabel(row)} was selected for deletion.`,
+  //   color: "error",
+  //   icon: "i-lucide-trash-2",
+  // })
 }
 
 function addRow() {
@@ -202,6 +202,28 @@ function getRowActions(row: DataTableRow) {
 }
 </script>
 
+<style scoped>
+  .table-scroll::-webkit-scrollbar {
+    height: 0.375rem;
+    width: 0.375rem;
+  }
+
+  .table-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .table-scroll::-webkit-scrollbar-thumb {
+    background-color: rgb(203, 213, 225);
+    border-radius: 0.25rem;
+    transition-property: background-color;
+    transition-duration: 300ms;
+  }
+
+  .table-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(148, 163, 184);
+  }
+</style>
+
 <template>
   <section class="overflow-hidden rounded-lg bg-surface-container-lowest shadow-sneat-card">
     <div class="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
@@ -233,7 +255,7 @@ function getRowActions(row: DataTableRow) {
       </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto table-scroll">
       <table class="w-full min-w-[760px] border-collapse text-left">
         <thead>
           <tr class="bg-surface-container-lowest">

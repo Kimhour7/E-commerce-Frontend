@@ -36,6 +36,11 @@ interface BranchApiResponse {
   total_pages: number
 }
 
+interface DeleteResponse {
+  success: boolean
+  message: string
+}
+
 definePageMeta({
   breadcrumbs: [
     { label: "Branch", to: "/branch" },
@@ -51,6 +56,9 @@ const { data: branchResponse, error, pending } = await useApiFetch<BranchApiResp
 const branchId = computed(() => String(route.params.id))
 const branch = computed(() => branchResponse.value?.data.find(item => item.id === branchId.value))
 
+const isDeleting = ref(false)
+const showDeleteDialog = ref(false)
+
 function displayValue(value: string | null | undefined) {
   return value || "-"
 }
@@ -61,6 +69,19 @@ function displayDate(value: string | null | undefined) {
 
 function displayTime(value: string | null | undefined) {
   return value ? value.slice(0, 8) : "-"
+}
+
+function getErrorMessage(error: any): string {
+  if (error?.data?.message) {
+    return error.data.message
+  }
+  if (error?.message) {
+    return error.message
+  }
+  if (error?.statusMessage) {
+    return error.statusMessage
+  }
+  return "An unexpected error occurred. Please try again."
 }
 
 const branchDetails = computed<RecordDetailItem[]>(() => {
@@ -94,14 +115,53 @@ const branchDetails = computed<RecordDetailItem[]>(() => {
   ]
 })
 
+// Step 1: clicking delete on the record ONLY opens the confirm dialog.
 function deleteBranch() {
-  toast.add({
-    title: "Delete selected",
-    description: `${branch.value?.name || "Branch"} was selected for deletion.`,
-    color: "error",
-    icon: "i-lucide-trash-2",
-  })
-  navigateTo("/branch")
+  showDeleteDialog.value = true
+}
+
+// Step 2: clicking "Delete Branch" inside the dialog is the ONLY place
+// that actually calls the API, shows a toast, and navigates away.
+async function confirmDeleteBranch() {
+  if (isDeleting.value || !branch.value) {
+    return
+  }
+
+  isDeleting.value = true
+
+  try {
+    await useApiRequest<DeleteResponse>(`/branch/delete/${branch.value.id}`, {
+      method: "DELETE",
+    })
+
+    toast.add({
+      title: "Branch deleted",
+      description: `${branch.value.name} was deleted successfully.`,
+      color: "error",
+      icon: "i-lucide-trash-2",
+    })
+
+    showDeleteDialog.value = false
+    navigateTo("/branch")
+  }
+  catch (error) {
+    toast.add({
+      title: "Failed to delete branch",
+      description: getErrorMessage(error),
+      color: "error",
+      icon: "i-lucide-circle-alert",
+    })
+
+    console.error("Delete error:", error)
+  }
+  finally {
+    isDeleting.value = false
+  }
+}
+
+// Clicking "Keep Branch" or the backdrop — just closes the dialog, no toast.
+function cancelDeleteBranch() {
+  showDeleteDialog.value = false
 }
 </script>
 
@@ -139,6 +199,17 @@ function deleteBranch() {
       :details="branchDetails"
       :edit-to="`/branch/${branch.id}/edit`"
       @delete="deleteBranch"
+    />
+
+    <AppConfirmDialog
+      v-model="showDeleteDialog"
+      title="Delete this branch permanently?"
+      :description="`This action will delete '${branch?.name}' and all associated data. This cannot be undone.`"
+      cancel-label="Keep Branch"
+      confirm-label="Delete Branch"
+      :loading="isDeleting"
+      @confirm="confirmDeleteBranch"
+      @cancel="cancelDeleteBranch"
     />
   </div>
 </template>

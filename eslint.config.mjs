@@ -22,7 +22,10 @@ export default withNuxt(
       unicorn: {
         overrides: {
           "unicorn/filename-case": ["error", {
-            case: "kebabCase",
+            cases: {
+              kebabCase: true,
+              pascalCase: true,
+            },
             ignore: ["README.md"],
           }],
         },

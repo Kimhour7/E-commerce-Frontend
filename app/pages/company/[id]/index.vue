@@ -38,6 +38,11 @@ interface CompanyApiResponse {
   total_pages: number
 }
 
+interface DeleteResponse {
+  success: boolean
+  message: string
+}
+
 definePageMeta({
   breadcrumbs: [
     { label: "Company", to: "/company" },
@@ -53,12 +58,28 @@ const { data: companyResponse, error, pending } = await useApiFetch<CompanyApiRe
 const companyId = computed(() => String(route.params.id))
 const company = computed(() => companyResponse.value?.data.find(item => item.id === companyId.value))
 
+const isDeleting = ref(false)
+const showDeleteDialog = ref(false)
+
 function displayValue(value: string | null | undefined) {
   return value || "-"
 }
 
 function displayDate(value: string | null | undefined) {
   return value ? value.slice(0, 10) : "-"
+}
+
+function getErrorMessage(error: any): string {
+  if (error?.data?.message) {
+    return error.data.message
+  }
+  if (error?.message) {
+    return error.message
+  }
+  if (error?.statusMessage) {
+    return error.statusMessage
+  }
+  return "An unexpected error occurred. Please try again."
 }
 
 const companyDetails = computed<RecordDetailItem[]>(() => {
@@ -95,13 +116,48 @@ const companyDetails = computed<RecordDetailItem[]>(() => {
 })
 
 function deleteCompany() {
-  toast.add({
-    title: "Delete selected",
-    description: `${company.value?.name || "Company"} was selected for deletion.`,
-    color: "error",
-    icon: "i-lucide-trash-2",
-  })
-  navigateTo("/company")
+  showDeleteDialog.value = true
+}
+
+async function confirmDeleteCompany() {
+  if (isDeleting.value || !company.value) {
+    return
+  }
+
+  isDeleting.value = true
+
+  try {
+    await useApiRequest<DeleteResponse>(`/company/delete/${company.value.id}`, {
+      method: "DELETE",
+    })
+
+    toast.add({
+      title: "Company deleted",
+      description: `${company.value.name} was deleted successfully.`,
+      color: "error",
+      icon: "i-lucide-trash-2",
+    })
+
+    showDeleteDialog.value = false
+    navigateTo("/company")
+  }
+  catch (error) {
+    toast.add({
+      title: "Failed to delete company",
+      description: getErrorMessage(error),
+      color: "error",
+      icon: "i-lucide-circle-alert",
+    })
+
+    console.error("Delete error:", error)
+  }
+  finally {
+    isDeleting.value = false
+  }
+}
+
+function cancelDeleteCompany() {
+  showDeleteDialog.value = false
 }
 </script>
 
@@ -139,6 +195,17 @@ function deleteCompany() {
       :details="companyDetails"
       :edit-to="`/company/${company.id}/edit`"
       @delete="deleteCompany"
+    />
+
+    <AppConfirmDialog
+      v-model="showDeleteDialog"
+      title="Delete this company permanently?"
+      :description="`This action will delete '${company?.name}' and all associated data. This cannot be undone.`"
+      cancel-label="Keep Company"
+      confirm-label="Delete Company"
+      :loading="isDeleting"
+      @confirm="confirmDeleteCompany"
+      @cancel="cancelDeleteCompany"
     />
   </div>
 </template>

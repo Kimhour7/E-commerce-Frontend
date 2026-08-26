@@ -4,7 +4,12 @@ import type { PageBreadcrumbItem } from "~/components/AppPageBreadcrumb.vue"
 const route = useRoute()
 
 const breadcrumbs = computed(() => (route.meta.breadcrumbs ?? []) as PageBreadcrumbItem[])
-const { user } = useAuth()
+const { user, fetchUser } = useAuth()
+const accessToken = useCookie("access_token")
+
+if (accessToken.value && !user.value) {
+  await fetchUser(accessToken.value)
+}
 
 const userDisplayName = computed(() => {
   if (!user.value) return "User profile"

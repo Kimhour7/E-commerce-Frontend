@@ -44,6 +44,11 @@ interface CompanyApiResponse {
   data: CompanyApiItem[]
 }
 
+interface DeleteResponse {
+  success: boolean
+  message: string
+}
+
 interface CompanyTableRow extends DataTableRow {
   id: string
   name: string
@@ -86,7 +91,12 @@ const columns: DataTableColumn[] = [
   { key: "actions", label: "Actions", align: "right" },
 ]
 
-const { data: companyResponse, error, pending } = await useApiFetch<CompanyApiResponse>("/company/get")
+const { data: companyResponse, error, pending, refresh } = await useApiFetch<CompanyApiResponse>("/company/get")
+
+const toast = useToast()
+const isDeleting = ref(false)
+const showDeleteDialog = ref(false)
+const rowPendingDelete = ref<DataTableRow | null>(null)
 
 function displayValue(value: string | null) {
   return value || "-"
@@ -94,6 +104,19 @@ function displayValue(value: string | null) {
 
 function displayDate(value: string | null) {
   return value ? value.slice(0, 10) : "-"
+}
+
+function getErrorMessage(error: any): string {
+  if (error?.data?.message) {
+    return error.data.message
+  }
+  if (error?.message) {
+    return error.message
+  }
+  if (error?.statusMessage) {
+    return error.statusMessage
+  }
+  return "An unexpected error occurred. Please try again."
 }
 
 const companies = computed<CompanyTableRow[]>(() =>
@@ -133,6 +156,62 @@ function duplicateCompany(row: DataTableRow) {
     },
   })
 }
+
+// Step 1: clicking the delete icon ONLY opens the confirm dialog.
+// No API call, no toast, no mutation happens here.
+function deleteCompany(row: DataTableRow) {
+  rowPendingDelete.value = row
+  showDeleteDialog.value = true
+}
+
+// Step 2: clicking "Delete Company" inside the dialog is the ONLY place
+// that actually calls the API, shows a toast, and refreshes the table.
+async function confirmDeleteCompany() {
+  if (isDeleting.value || !rowPendingDelete.value) {
+    return
+  }
+
+  const companyId = String(rowPendingDelete.value.id)
+  const companyName = String(rowPendingDelete.value.name)
+
+  isDeleting.value = true
+
+  try {
+    await useApiRequest<DeleteResponse>(`/company/delete/${companyId}`, {
+      method: "DELETE",
+    })
+
+    toast.add({
+      title: "Record deleted",
+      description: `${companyName} was selected for deletion.`,
+      color: "error",
+      icon: "i-lucide-trash-2",
+    })
+
+    showDeleteDialog.value = false
+    await refresh()
+  }
+  catch (error) {
+    toast.add({
+      title: "Failed to delete company",
+      description: getErrorMessage(error),
+      color: "error",
+      icon: "i-lucide-circle-alert",
+    })
+
+    console.error("Delete error:", error)
+  }
+  finally {
+    isDeleting.value = false
+    rowPendingDelete.value = null
+  }
+}
+
+// Clicking "Keep Company" or the backdrop — just closes the dialog, no toast.
+function cancelDeleteCompany() {
+  showDeleteDialog.value = false
+  rowPendingDelete.value = null
+}
 </script>
 
 <template>
@@ -171,7 +250,20 @@ function duplicateCompany(row: DataTableRow) {
       search-placeholder="Search companies by name, email, or phone..."
       title="Companies"
       view-path-prefix="/company"
+      :is-loading="isDeleting"
+      @delete="deleteCompany"
       @duplicate="duplicateCompany"
+    />
+
+    <AppConfirmDialog
+      v-model="showDeleteDialog"
+      title="Delete this company permanently?"
+      :description="`This action will delete '${rowPendingDelete?.name}' and all associated data. This cannot be undone.`"
+      cancel-label="Keep Company"
+      confirm-label="Delete Company"
+      :loading="isDeleting"
+      @confirm="confirmDeleteCompany"
+      @cancel="cancelDeleteCompany"
     />
   </div>
 </template>
